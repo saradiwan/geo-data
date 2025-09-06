@@ -1,1 +1,5 @@
-pip install streamlit>=1.24.0 numpy>=1.25.0 folium>=0.16.0 streamlit-folium>=0.11.0 requests>=2.31.0
+streamlit>=1.24.0
+numpy>=1.25.0
+folium>=0.16.0
+streamlit-folium>=0.11.0
+requests>=2.31.0
