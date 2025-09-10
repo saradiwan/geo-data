@@ -1,8 +1,6 @@
-# app.py
+# app.py (Final Responsive Mobile-Friendly Update)
 # -------------------------------------------------------------
 # Real-Time AHP Site Suitability (Satellite + OSM + Manual + Map)
-# Author: ChatGPT for Sara's friend (Geography)
-# Run:  streamlit run app.py
 # -------------------------------------------------------------
 
 import math
@@ -14,8 +12,7 @@ import streamlit as st
 try:
     import folium
     from streamlit_folium import st_folium
-    import requests
-    from folium import plugins
+    from folium import plugins, IFrame
 except Exception:
     folium = None
     st_folium = None
@@ -82,7 +79,7 @@ class AHPModel:
 # ------------------------------
 def score_to_color(score: float) -> str:
     if score >= 0.8: return 'green'
-    if score >= 0.6: return 'yellow'
+    if score >= 0.6: return 'black'   # Moderately suitable in black
     if score >= 0.4: return 'orange'
     return 'red'
 
@@ -130,48 +127,48 @@ with st.sidebar:
 
 # Main input with persistence
 st.subheader("1️⃣ Location Input")
-lat = st.number_input("Latitude (India 6–37)", min_value=6.0, max_value=37.0,
-                      value=float(st.session_state.get("lat", 22.7196)), step=0.0001, key="lat_input")
-lon = st.number_input("Longitude (India 68–97)", min_value=68.0, max_value=97.0,
-                      value=float(st.session_state.get("lon", 75.8577)), step=0.0001, key="lon_input")
+col1, col2, col3 = st.columns([2,2,1])
+with col1:
+    lat = st.number_input("Latitude (India 6–37)", min_value=6.0, max_value=37.0,
+                          value=float(st.session_state.get("lat", 22.7196)), step=0.0001, key="lat_input")
+with col2:
+    lon = st.number_input("Longitude (India 68–97)", min_value=68.0, max_value=97.0,
+                          value=float(st.session_state.get("lon", 75.8577)), step=0.0001, key="lon_input")
+with col3:
+    if st.button("🎲 Random"):
+        lat = np.random.uniform(6, 37)
+        lon = np.random.uniform(68, 97)
+        st.session_state["lat"] = lat
+        st.session_state["lon"] = lon
+        st.experimental_rerun()
+
 st.session_state["lat"] = lat
 st.session_state["lon"] = lon
 
 # Auto-compute site values
 site_values = get_site_values(lat, lon)
 
-# Show criteria automatically (responsive: 2 columns on wide screen)
+# Show criteria automatically
 st.subheader("2️⃣ Normalized Criteria (0–1)")
 cols = st.columns(2)
 for i, (k,v) in enumerate(site_values.items()):
     color_val = 'red' if v < 0.5 else 'green'
     with cols[i % 2]:
-        st.markdown(f"<span style='color:{color_val}'><b>{k}:</b> {v:.2f}</span>", unsafe_allow_html=True)
+        st.markdown(f"<span style='color:{color_val}; font-size:16px;'><b>{k}:</b> {v:.2f}</span>", unsafe_allow_html=True)
 
 # Compute score
 score = ahp.score(site_values)
 rec_text = score_to_text(score)
-color = score_to_color(score)
-
-# Show final score
-st.subheader("3️⃣ Final Suitability Score")
-st.progress(min(max(score,0),1), text=f"Score: {score:.3f}")
-st.success(f"Recommendation: {rec_text}")
+text_color = score_to_color(score)
 
 # ------------------------------
-# 4️⃣ Map Visualization
+# 3️⃣ Map Visualization
 # ------------------------------
-st.subheader("4️⃣ Map Visualization")
+st.subheader("3️⃣ Map Visualization")
 
 if folium and st_folium:
     with st.expander("Show India Map", expanded=True):
-        m = folium.Map(
-            location=[lat, lon],
-            zoom_start=6,
-            control_scale=True,
-            prefer_canvas=True,
-            tiles="OpenStreetMap"
-        )
+        m = folium.Map(location=[lat, lon], zoom_start=6, control_scale=True, prefer_canvas=True, tiles="OpenStreetMap", width="100%", height=500)
 
         # Add controls
         folium.LayerControl().add_to(m)
@@ -179,17 +176,59 @@ if folium and st_folium:
         plugins.MousePosition().add_to(m)
         plugins.ScrollZoomToggler().add_to(m)
 
-        # Marker (yellow pin with popup)
+        # Responsive Popup HTML
+        html = f"""
+        <div style="
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid #ccc;
+            background: linear-gradient(135deg, #ffffff, #f9f9f9);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            width: 100%;
+            max-width: 280px;
+            box-sizing: border-box;
+            word-wrap: break-word;
+        ">
+            <h4 style="margin:0 0 8px 0; font-size:17px; color:#333;">📍 Site Details</h4>
+            <p style="margin:3px 0; color:#444;">
+                <b>Latitude:</b> {lat:.4f}<br>
+                <b>Longitude:</b> {lon:.4f}
+            </p>
+            <hr style="margin:5px 0; border: none; border-top: 1px solid #ddd;">
+            <p style="margin:3px 0; font-size:15px;">
+                <b>⭐ Score:</b> <span style="color:{text_color}; font-weight:bold;">{score:.3f}</span><br>
+                <b>✅ Recommendation:</b> <span style="color:{text_color}; font-weight:bold;">{rec_text}</span>
+            </p>
+        </div>
+        """
+        iframe = IFrame(html=html, width=300, height=180)
+        popup = folium.Popup(iframe, max_width=300)
+
+        # Always Red Pin
         folium.Marker(
             location=[lat, lon],
-            icon=folium.Icon(color="yellow", icon="info-sign"),
-            popup=f"Lat: {lat:.4f}, Lon: {lon:.4f} | Score: {score:.3f} | {rec_text}"
+            icon=folium.Icon(color="red", icon="info-sign"),
+            popup=popup
         ).add_to(m)
 
         # Fit bounds to India
         m.fit_bounds([[6, 68], [37, 97]])
 
-        # ✅ Responsive map
-        st_folium(m, use_container_width=True, height=600)
+        # Fully Responsive map
+        st_folium(m, use_container_width=True, height=500)
 else:
     st.info("Install folium + streamlit-folium: pip install folium streamlit-folium")
+
+# ------------------------------
+# 4️⃣ Final Suitability Score
+# ------------------------------
+st.subheader("4️⃣ Final Suitability Score")
+st.progress(min(max(score,0),1), text=f"Score: {score:.3f}")
+st.markdown(
+    f"<div style='padding:16px; background:#f0f8ff; border-radius:10px; border:1px solid #007BFF; "
+    f"font-size:22px; text-align:center;'><b>Recommendation:</b> "
+    f"<span style='color:{text_color}; font-weight:bold;'>{rec_text}</span></div>",
+    unsafe_allow_html=True
+)
